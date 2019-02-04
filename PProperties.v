@@ -40,17 +40,46 @@ Proof.
     + rewrite <- H1; assumption.
     + econstructor 6; auto.
       intro; specialize (HDisjRegs v); rewrite H1 in HDisjRegs; apply HDisjRegs.
+  - exists ((r, existT (fullType type) _ regV)::x), x0, x1.
+    repeat split; eauto.
+    + rewrite <- H0; assumption.
+    + econstructor 7; eauto.
+  - exists ((r, existT (fullType type) _ regV)::x), x0, x1.
+    repeat split; eauto.
+    + rewrite <- H0; assumption.
+    + econstructor 8; eauto.
+  - exists ((r, existT _ _ eOld) :: x), ((r, existT (fullType type) (SyntaxKind (Array num k)) (fun i' : Fin.t num => if Fin_eq_dec i i' then evalExpr e else eOld i'))::x0), x1.
+    repeat split; eauto.
+    + rewrite <- H0; assumption.
+    + rewrite <- H1; assumption.
+    + econstructor 9; auto.
+      auto.
+      intro; specialize (HDisjRegs v); rewrite H1 in HDisjRegs; apply HDisjRegs.
+  - exists ((r, existT _ _ eOld) :: x), ((r, existT (fullType type) (SyntaxKind (Array num k))
+                                                    (match num return (fullType type (SyntaxKind (Array num k)) -> Fin.t num -> fullType type (SyntaxKind k)) with
+                                                     | 0 => fun _ _ => evalConstT Default
+                                                     | S m =>
+                                                       fun eOld i'' =>
+                                                         if Fin_eq_dec (natToFin m # (evalExpr i)) i'' then evalExpr e else eOld i''
+                                                     end eOld)
+                                         )::x0), x1.
+    repeat split; eauto.
+    + rewrite <- H0; assumption.
+    + rewrite <- H1; assumption.
+    + econstructor 10; auto.
+      auto.
+      intro; specialize (HDisjRegs v); rewrite H1 in HDisjRegs; apply HDisjRegs.
   - exists (x2++x), (x3++x0), (x4++x1).
     rewrite H1, H5 in HUReadRegs; rewrite H2, H6 in HUNewRegs; rewrite H3, H7 in HUCalls.
     repeat split; auto.
-    econstructor 7; auto.
+    econstructor 11; auto.
     + intro; specialize (HDisjRegs k); rewrite H2, H6 in HDisjRegs; apply HDisjRegs.
     + apply H8.
     + assumption.
   - exists (x2++x), (x3++x0), (x4++x1).
     rewrite H1, H5 in HUReadRegs; rewrite H2, H6 in HUNewRegs; rewrite H3, H7 in HUCalls.
     repeat split; auto.
-    econstructor 8; auto.
+    econstructor 12; auto.
     + intro; specialize (HDisjRegs k); rewrite H2, H6 in HDisjRegs; apply HDisjRegs.
     + apply H8.
     + assumption.
@@ -82,6 +111,10 @@ Proof.
   - econstructor 9; eauto.
   - econstructor 10; eauto.
   - econstructor 11; eauto.
+  - econstructor 12; eauto.
+  - econstructor 13; eauto.
+  - econstructor 14; eauto.
+  - econstructor 15; eauto.
 Qed.
 
 Lemma key_in_split' : forall (A B C : Type)(l : list (A*B))(x : (A*C)),
@@ -197,10 +230,22 @@ Section PSemAction_rewrites.
       rewrite <- H.
       assumption.
     - econstructor 7; eauto.
+      rewrite <- H.
+      assumption.
     - econstructor 8; eauto.
+      rewrite <- H.
+      assumption.
     - econstructor 9; eauto.
+      rewrite <- H.
+      assumption.
     - econstructor 10; eauto.
+      rewrite <- H.
+      assumption.
     - econstructor 11; eauto.
+    - econstructor 12; eauto.
+    - econstructor 13; eauto.
+    - econstructor 14; eauto.
+    - econstructor 15; eauto.
   Qed.
 
   Lemma PSemAction_rewrite_calls readRegs newRegs calls1 calls2 o:
@@ -218,12 +263,16 @@ Section PSemAction_rewrites.
     - econstructor 5; eauto.
     - econstructor 6; eauto.
     - econstructor 7; eauto.
-      rewrite <- H; assumption.
     - econstructor 8; eauto.
-      rewrite <- H; assumption.
     - econstructor 9; eauto.
     - econstructor 10; eauto.
     - econstructor 11; eauto.
+      rewrite <- H; assumption.
+    - econstructor 12; eauto.
+      rewrite <- H; assumption.
+    - econstructor 13; eauto.
+    - econstructor 14; eauto.
+    - econstructor 15; eauto.
       rewrite HCalls in H; apply (Permutation_nil H).
   Qed.
 
@@ -256,8 +305,16 @@ Section PSemAction_rewrites.
     - econstructor 8; eauto.
       rewrite <- H; assumption.
     - econstructor 9; eauto.
+      rewrite <- H; assumption.
     - econstructor 10; eauto.
+      rewrite <- H; assumption.
     - econstructor 11; eauto.
+      rewrite <- H; assumption.
+    - econstructor 12; eauto.
+      rewrite <- H; assumption.
+    - econstructor 13; eauto.
+    - econstructor 14; eauto.
+    - econstructor 15; eauto.
       rewrite HReadRegs in H; apply (Permutation_nil H).
   Qed.
 
@@ -276,12 +333,18 @@ Section PSemAction_rewrites.
     - econstructor 6; eauto.
       rewrite <- H; assumption.
     - econstructor 7; eauto.
-      rewrite <- H; assumption.
     - econstructor 8; eauto.
-      rewrite <- H; assumption.
     - econstructor 9; eauto.
+      rewrite <- H; assumption.
     - econstructor 10; eauto.
+      rewrite <- H; assumption.
     - econstructor 11; eauto.
+      rewrite <- H; assumption.
+    - econstructor 12; eauto.
+      rewrite <- H; assumption.
+    - econstructor 13; eauto.
+    - econstructor 14; eauto.
+    - econstructor 15; eauto.
       rewrite HNewRegs in H; apply (Permutation_nil H).
   Qed.
   
@@ -1381,6 +1444,12 @@ Proof.
   - subst; rewrite HANewRegs in *;firstorder; simpl in *.
     subst.
     assumption.
+  - subst; rewrite HANewRegs in *;firstorder; simpl in *.
+    subst.
+    apply (in_map (fun x => (fst x, projT1 (snd x)))) in HRegVal; auto.
+  - subst; rewrite HANewRegs in *;firstorder; simpl in *.
+    subst.
+    apply (in_map (fun x => (fst x, projT1 (snd x)))) in HRegVal; auto.
   - rewrite HUNewRegs in *.
     rewrite map_app, in_app_iff in *.
     destruct H1; intuition.
@@ -1417,6 +1486,28 @@ Proof.
     apply SubList_cons in H1; dest.
     specialize (IHPSemAction H0 H2).
     econstructor; eauto.
+  - rewrite HNewReads in *.
+    apply SubList_cons in H0; dest.
+    specialize (IHPSemAction H2 H1).
+    econstructor; eauto.
+  - rewrite HNewReads in *.
+    apply SubList_cons in H0; dest.
+    specialize (IHPSemAction H2 H1).
+    econstructor; eauto.
+  - rewrite HANewRegs in *.
+    simpl in *.
+    apply SubList_cons in H1; dest.
+    rewrite HAReadRegs in H0.
+    apply SubList_cons in H0; dest.
+    specialize (IHPSemAction H3 H2).
+    econstructor; eauto.
+  - rewrite HANewRegs in *.
+    simpl in *.
+    apply SubList_cons in H1; dest.
+    rewrite HAReadRegs in H0.
+    apply SubList_cons in H0; dest.
+    specialize (IHPSemAction H3 H2).
+    econstructor; eauto.
   - rewrite HUReadRegs in *; rewrite HUNewRegs in *.
     apply SubList_app_l in H0; dest.
     rewrite map_app in *.
@@ -1430,7 +1521,7 @@ Proof.
     apply SubList_app_l in H1; dest.
     specialize (IHPSemAction1 H0 H1).
     specialize (IHPSemAction2 H3 H4).
-    econstructor 8; eauto.
+    econstructor 12; eauto.
 Qed.
 
 Lemma PSubsteps_upd_SubList_key m o l:
@@ -1687,15 +1778,49 @@ Lemma WfActionT_PSemAction : forall (k : Kind)(a : ActionT type k)(retl : type k
   - intros TMP1 TMP2; specialize (IHPSemAction H5 o1 TMP1 TMP2).
     econstructor 6; eauto.
     rewrite TMP2; assumption.
-  - intros TMP1 TMP2; specialize (IHPSemAction1 H8 o1 TMP1 TMP2); specialize (IHPSemAction2 (H5 r1) o1 TMP1 TMP2).
+  - intros TMP1 TMP2.
+    specialize (IHPSemAction (H5 (regV i)) o1 TMP1 TMP2).
     econstructor 7; eauto.
-  - intros TMP1 TMP2; specialize (IHPSemAction1 H9 o1 TMP1 TMP2); specialize (IHPSemAction2 (H5 r1) o1 TMP1 TMP2).
+    apply (KeyRefinement (r, existT (fullType type) _ regV) H0 TMP1 HRegVal).
+    rewrite <- TMP2 in H9; apply (in_map fst) in H9; specialize (GKA_fst (A:=string)(fullType type) o1); intro.
+    simpl in *.
+    setoid_rewrite H2; assumption.
+  - intros TMP1 TMP2.
+    specialize (IHPSemAction (H5
+                               (match num return (Fin.t num -> fullType type (SyntaxKind regT)) ->
+                                                 fullType type (SyntaxKind regT) with
+                                | 0 => fun _ => evalConstT (getDefaultConst regT)
+                                | S m => fun fv => fv (natToFin m (wordToNat (@evalExpr _ i)))
+                                end regV)
+                            ) o1 TMP1 TMP2).
     econstructor 8; eauto.
-  - intros TMP1 TMP2; specialize (IHPSemAction H4 o1 TMP1 TMP2).
+    apply (KeyRefinement (r, existT (fullType type) _ regV) H0 TMP1 HRegVal).
+    rewrite <- TMP2 in H9; apply (in_map fst) in H9; specialize (GKA_fst (A:=string)(fullType type) o1); intro.
+    simpl in *.
+    setoid_rewrite H2; assumption.
+  - intros TMP1 TMP2.
+    specialize (IHPSemAction H5 o1 TMP1 TMP2).
     econstructor 9; eauto.
-  - intros TMP1 TMP2; specialize (IHPSemAction H4 o1 TMP1 TMP2).
+    apply (KeyRefinement (r, existT (fullType type) _ eOld) H0 TMP1 HRegVal).
+    rewrite <- TMP2 in H10; apply (in_map fst) in H10; specialize (GKA_fst (A:=string)(fullType type) o1); intro.
+    simpl in *.
+    setoid_rewrite H2; assumption.
+  - intros TMP1 TMP2.
+    specialize (IHPSemAction H5 o1 TMP1 TMP2).
     econstructor 10; eauto.
-  - intros; econstructor 11; eauto.
+    apply (KeyRefinement (r, existT (fullType type) _ eOld) H0 TMP1 HRegVal).
+    rewrite <- TMP2 in H10; apply (in_map fst) in H10; specialize (GKA_fst (A:=string)(fullType type) o1); intro.
+    simpl in *.
+    setoid_rewrite H2; assumption.
+  - intros TMP1 TMP2; specialize (IHPSemAction1 H8 o1 TMP1 TMP2); specialize (IHPSemAction2 (H5 r1) o1 TMP1 TMP2).
+    econstructor 11; eauto.
+  - intros TMP1 TMP2; specialize (IHPSemAction1 H9 o1 TMP1 TMP2); specialize (IHPSemAction2 (H5 r1) o1 TMP1 TMP2).
+    econstructor 12; eauto.
+  - intros TMP1 TMP2; specialize (IHPSemAction H4 o1 TMP1 TMP2).
+    econstructor 13; eauto.
+  - intros TMP1 TMP2; specialize (IHPSemAction H4 o1 TMP1 TMP2).
+    econstructor 14; eauto.
+  - intros; econstructor 15; eauto.
 Qed.
 
 Lemma papp_sublist_l : forall {A : Type} (l1 l2 l : list A),
@@ -2210,9 +2335,13 @@ Proof.
   - intros; split; econstructor 6; eauto; inv H; EqDep_subst; eapply IHa; eauto.
   - intros; split; econstructor 7; eauto; inv H0; EqDep_subst; try intros; try eapply H; eauto;
       try eapply IHa1; eauto; eapply IHa2; eauto.
-  - intros; split; econstructor 8; eauto; inv H; EqDep_subst; eapply IHa; eauto.
-  - intros; split; econstructor 9; eauto; inv H; EqDep_subst; eapply IHa; eauto.
-  - intros; split; econstructor 10.
+  - intros; split; econstructor 8; eauto; inv H0; EqDep_subst; try intros; firstorder fail.
+  - intros; split; econstructor 9; eauto; inv H; EqDep_subst; try intros; firstorder fail.
+  - intros; split; econstructor 10; eauto; inv H; EqDep_subst; eapply IHa; eauto.
+  - intros; split; econstructor 11; eauto; inv H0; EqDep_subst; try intros; firstorder fail.
+  - intros; split; econstructor 12; eauto; inv H; EqDep_subst; eapply IHa; eauto.
+  - intros; split; econstructor 13; eauto; inv H; EqDep_subst; eapply IHa; eauto.
+  - intros; split; econstructor 14; eauto; inv H; EqDep_subst; eapply IHa; eauto.
 Qed.
 
 Lemma WfConcatMerge m1 m2 (k : Kind) (a : ActionT type k) :
@@ -2229,9 +2358,13 @@ Proof.
   - econstructor 5; inv H0; inv H1; EqDep_subst; intros; eapply H; eauto.
   - econstructor 6; inv H; inv H0; EqDep_subst; eapply IHa; eauto.
   - econstructor 7; inv H0; inv H1; EqDep_subst; intros; try eapply H, IHa1, IHa2; eauto.
-  - econstructor 8; inv H; inv H0; EqDep_subst; eapply IHa; eauto.
-  - econstructor 9; inv H; inv H0; EqDep_subst; eapply IHa; eauto.
-  - econstructor 10.
+  - econstructor 8; inv H0; inv H1; EqDep_subst; intros; try eapply H, IHa1, IHa2; eauto.
+  - econstructor 9; inv H0; inv H; EqDep_subst; intros; try eapply H, IHa1, IHa2; eauto.
+  - econstructor 10; inv H0; inv H; EqDep_subst; intros; try eapply H, IHa1, IHa2; eauto.
+  - econstructor 11; inv H0; inv H1; EqDep_subst; intros; try eapply H, IHa1, IHa2; eauto.
+  - econstructor 12; inv H; inv H0; EqDep_subst; eapply IHa; eauto.
+  - econstructor 13; inv H; inv H0; EqDep_subst; eapply IHa; eauto.
+  - econstructor 14.
 Qed.
     
 

@@ -93,6 +93,44 @@ Section InverseSemAction.
       key_not_In r pnews /\
       SemAction o a reads pnews calls retC /\
       news = (r, (existT _ _ (evalExpr e))) :: pnews
+    | ReadRegArrayConst r num k i c =>
+      exists rv reads2,
+      In (r, existT _ (SyntaxKind (Array num k)) rv) o /\
+      SemAction o (c (rv i)) reads2 news calls retC /\
+      reads = (r, existT _ (SyntaxKind (Array num k)) rv) :: reads2
+    | ReadRegArray r num k i c =>
+      exists rv reads2,
+      In (r, existT _ (SyntaxKind (Array num k)) rv) o /\
+      SemAction o (c ((match num return ((Fin.t num -> fullType type (SyntaxKind k)) -> fullType type (SyntaxKind k)) with
+                       | 0 => fun _ => evalConstT (getDefaultConst _)
+                       | S m => fun fv => fv (natToFin m (wordToNat (evalExpr i)))
+                       end rv))) reads2 news calls retC /\
+      reads = (r, existT _ (SyntaxKind (Array num k)) rv) :: reads2
+    | WriteRegArrayConst r num k i e a =>
+      exists pnews preads eOld,
+      In (r, existT (fullType type) (SyntaxKind (Array num k)) eOld) o /\
+      key_not_In r pnews /\
+      SemAction o a preads pnews calls retC /\
+      news = (r, (existT (fullType type) (SyntaxKind (Array num k))
+                         (fun i' => match Fin_eq_dec i i' with
+                                    | left _ => evalExpr e
+                                    | _ => eOld i'
+                                    end))) :: pnews /\
+      reads = (r, existT (fullType type) (SyntaxKind (Array num k)) eOld) :: preads
+    | WriteRegArray r num k i e a =>
+      exists pnews preads eOld,
+      In (r, existT (fullType type) (SyntaxKind (Array num k)) eOld) o /\
+      key_not_In r pnews /\
+      SemAction o a preads pnews calls retC /\
+      news = (r, (existT (fullType type) (SyntaxKind (Array num k))
+                         (match num return fullType type (SyntaxKind (Array num k)) -> Fin.t num -> fullType type (SyntaxKind k) with
+                          | 0 => fun _ _ => evalConstT (getDefaultConst k)
+                          | S m => fun eOld i'' => match Fin_eq_dec (natToFin m (wordToNat (@evalExpr _ i))) i'' with
+                                                   | left _ => evalExpr e
+                                                   | _ => eOld i''
+                                                   end
+                          end eOld))) :: pnews /\
+      reads = (r, existT (fullType type) (SyntaxKind (Array num k)) eOld) :: preads
     | IfElse p _ aT aF c =>
       exists reads1 news1 calls1 reads2 news2 calls2 r1,
       DisjKey news1 news2 /\
@@ -143,6 +181,14 @@ Section InverseSemAction.
         rewrite ?in_app_iff in *.
     - subst; firstorder.
     - repeat (subst; firstorder).
+    - simpl in H0.
+      destruct H0; subst; auto.
+    - simpl in H0.
+      destruct H0; subst; auto.
+    - simpl in H0.
+      destruct H0; subst; auto.
+    - simpl in H0.
+      destruct H0; subst; auto.
     - subst.
       rewrite ?in_app_iff in H1.
       destruct H1; intuition.
@@ -1996,6 +2042,10 @@ Proof.
   - subst; firstorder; simpl in *.
     subst.
     assumption.
+  - simpl in *; destruct H0; subst; auto.
+    apply (in_map (fun x => (fst x, projT1 (snd x)))) in HRegVal; simpl in *; auto.
+  - simpl in *; destruct H0; subst; auto.
+    apply (in_map (fun x => (fst x, projT1 (snd x)))) in HRegVal; simpl in *; auto.
   - subst.
     rewrite map_app, in_app_iff in *.
     destruct H1; intuition.
@@ -2033,6 +2083,28 @@ Proof.
     specialize (IHSemAction H0 H2).
     econstructor; eauto.
   - subst.
+    simpl in *.
+    apply SubList_cons in H0; dest.
+    specialize (IHSemAction H2 H1).
+    econstructor; eauto.
+  - subst.
+    simpl in *.
+    apply SubList_cons in H0; dest.
+    specialize (IHSemAction H2 H1).
+    econstructor; eauto.
+  - subst.
+    simpl in *.
+    apply SubList_cons in H0; dest.
+    apply SubList_cons in H1; dest.
+    specialize (IHSemAction H2 H3).
+    econstructor; eauto.
+  - subst.
+    simpl in *.
+    apply SubList_cons in H0; dest.
+    apply SubList_cons in H1; dest.
+    specialize (IHSemAction H2 H3).
+    econstructor; eauto.
+  - subst.
     apply SubList_app_l in H0; dest.
     rewrite map_app in *.
     apply SubList_app_l in H1; dest.
@@ -2045,7 +2117,7 @@ Proof.
     apply SubList_app_l in H1; dest.
     specialize (IHSemAction1 H0 H1).
     specialize (IHSemAction2 H3 H4).
-    econstructor 8; eauto.
+    econstructor 12; eauto.
 Qed.
 
 Lemma Substeps_combine m1 o1 l1:
@@ -2583,6 +2655,10 @@ Proof.
     + apply (IHSemAction1 H3 _ H0).
     + apply (IHSemAction2 (H5 v) _ H0).
   - inversion H; EqDep_subst. repeat intro. destruct H1;[subst;assumption|apply IHSemAction; auto].
+  - inversion H; EqDep_subst. repeat intro. destruct H1;[subst;assumption|apply IHSemAction; auto].
+  - inversion H; EqDep_subst. repeat intro. destruct H1;[subst;assumption|apply IHSemAction; auto].
+  - inversion H; EqDep_subst. repeat intro. destruct H1;[subst;assumption|apply IHSemAction; auto].
+  - inversion H; EqDep_subst. repeat intro. destruct H1;[subst;assumption|apply IHSemAction; auto].
   - rewrite map_app; repeat intro. apply in_app_iff in H0; destruct H0.
     + apply (IHSemAction1 H7 _ H0).
     + apply (IHSemAction2 (H4 r1) _ H0).
@@ -2602,6 +2678,8 @@ Proof.
   - rewrite map_app. repeat intro. apply in_app_iff in H0; destruct H0.
     + apply (IHSemAction1 H3 _ H0).
     + apply (IHSemAction2 (H5 v) _ H0).
+  - inversion H; EqDep_subst. repeat intro. destruct H1;[subst;assumption|apply IHSemAction; auto].
+  - inversion H; EqDep_subst. repeat intro. destruct H1;[subst;assumption|apply IHSemAction; auto].
   - inversion H; EqDep_subst. repeat intro. destruct H1;[subst;assumption|apply IHSemAction; auto].
   - rewrite map_app; repeat intro. apply in_app_iff in H0; destruct H0.
     + apply (IHSemAction1 H7 _ H0).
@@ -2699,15 +2777,49 @@ Lemma WfActionT_SemAction : forall (k : Kind)(a : ActionT type k)(retl : type k)
   - intros TMP1 TMP2; specialize (IHSemAction H5 o1 TMP1 TMP2).
     econstructor 6; eauto.
     rewrite TMP2; assumption.
-  - intros TMP1 TMP2; specialize (IHSemAction1 H8 o1 TMP1 TMP2); specialize (IHSemAction2 (H5 r1) o1 TMP1 TMP2).
+  - intros TMP1 TMP2.
+    specialize (IHSemAction (H5 (regV i)) o1 TMP1 TMP2).
     econstructor 7; eauto.
-  - intros TMP1 TMP2; specialize (IHSemAction1 H9 o1 TMP1 TMP2); specialize (IHSemAction2 (H5 r1) o1 TMP1 TMP2).
+    apply (KeyRefinement (r, existT (fullType type) _ regV) H0 TMP1 HRegVal).
+    rewrite <- TMP2 in H9; apply (in_map fst) in H9; specialize (GKA_fst (A:=string)(fullType type) o1); intro.
+    simpl in *.
+    setoid_rewrite H2; assumption.
+  - intros TMP1 TMP2.
+    specialize (IHSemAction (H5
+                               (match num return (Fin.t num -> fullType type (SyntaxKind regT)) ->
+                                                 fullType type (SyntaxKind regT) with
+                                | 0 => fun _ => evalConstT (getDefaultConst regT)
+                                | S m => fun fv => fv (natToFin m (wordToNat (@evalExpr _ i)))
+                                end regV)
+                            ) o1 TMP1 TMP2).
     econstructor 8; eauto.
-  - intros TMP1 TMP2; specialize (IHSemAction H4 o1 TMP1 TMP2).
+    apply (KeyRefinement (r, existT (fullType type) _ regV) H0 TMP1 HRegVal).
+    rewrite <- TMP2 in H9; apply (in_map fst) in H9; specialize (GKA_fst (A:=string)(fullType type) o1); intro.
+    simpl in *.
+    setoid_rewrite H2; assumption.
+  - intros TMP1 TMP2.
+    specialize (IHSemAction H5 o1 TMP1 TMP2).
     econstructor 9; eauto.
-  - intros TMP1 TMP2; specialize (IHSemAction H4 o1 TMP1 TMP2).
+    apply (KeyRefinement (r, existT (fullType type) _ eOld) H0 TMP1 HRegVal).
+    rewrite <- TMP2 in H10; apply (in_map fst) in H10; specialize (GKA_fst (A:=string)(fullType type) o1); intro.
+    simpl in *.
+    setoid_rewrite H2; assumption.
+  - intros TMP1 TMP2.
+    specialize (IHSemAction H5 o1 TMP1 TMP2).
     econstructor 10; eauto.
-  - intros; econstructor 11; eauto.
+    apply (KeyRefinement (r, existT (fullType type) _ eOld) H0 TMP1 HRegVal).
+    rewrite <- TMP2 in H10; apply (in_map fst) in H10; specialize (GKA_fst (A:=string)(fullType type) o1); intro.
+    simpl in *.
+    setoid_rewrite H2; assumption.
+  - intros TMP1 TMP2; specialize (IHSemAction1 H8 o1 TMP1 TMP2); specialize (IHSemAction2 (H5 r1) o1 TMP1 TMP2).
+    econstructor 11; eauto.
+  - intros TMP1 TMP2; specialize (IHSemAction1 H9 o1 TMP1 TMP2); specialize (IHSemAction2 (H5 r1) o1 TMP1 TMP2).
+    econstructor 12; eauto.
+  - intros TMP1 TMP2; specialize (IHSemAction H4 o1 TMP1 TMP2).
+    econstructor 13; eauto.
+  - intros TMP1 TMP2; specialize (IHSemAction H4 o1 TMP1 TMP2).
+    econstructor 14; eauto.
+  - intros; econstructor 15; eauto.
 Qed.
 
 Lemma app_sublist_l : forall {A : Type} (l1 l2 l : list A),
@@ -4520,6 +4632,20 @@ Proof.
     rewrite in_map_iff in H0; dest.
     destruct x; simpl in *; subst.
     firstorder fail.
+  - simpl.
+    constructor; auto.
+    unfold key_not_In in *.
+    intro.
+    rewrite in_map_iff in H0; dest.
+    destruct x; simpl in *; subst.
+    firstorder fail.
+  - simpl.
+    constructor; auto.
+    unfold key_not_In in *.
+    intro.
+    rewrite in_map_iff in H0; dest.
+    destruct x; simpl in *; subst.
+    firstorder fail.
   - apply NoDup_app; auto.
   - apply NoDup_app; auto.
   - simpl; constructor.
@@ -5079,8 +5205,8 @@ Lemma SemAction_if k1 k (e: Bool @# type) (a1 a2: ActionT type k1) (a: type k1 -
   SemAction o (IfElse e a1 a2 a) reads u cs v.
 Proof.
   case_eq (evalExpr e); intros; inv H0; EqDep_subst.
-  - econstructor 7; eauto.
-  - econstructor 8; eauto.
+  - econstructor 11; eauto.
+  - econstructor 12; eauto.
 Qed.
 
 Ltac discharge_NoSelfCall :=

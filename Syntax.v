@@ -363,6 +363,10 @@ Section Phoas.
   | ReadReg (r: string) k: (fullType k -> ActionT lretT) -> ActionT lretT
   | WriteReg (r: string) k:
       Expr k -> ActionT lretT -> ActionT lretT
+  | ReadRegArrayConst (r: string) num k (i: Fin.t num): (fullType (SyntaxKind k) -> ActionT lretT) -> ActionT lretT
+  | ReadRegArray (r: string) num k (i: Expr (SyntaxKind (Bit (Nat.log2_up num)))): (fullType (SyntaxKind k) -> ActionT lretT) -> ActionT lretT
+  | WriteRegArrayConst (r: string) num k (i: Fin.t num) (val: Expr (SyntaxKind k)): ActionT lretT -> ActionT lretT
+  | WriteRegArray (r: string) num k (i: Expr (SyntaxKind (Bit (Nat.log2_up num)))) (val: Expr (SyntaxKind k)): ActionT lretT -> ActionT lretT
   | IfElse: Expr (SyntaxKind Bool) -> forall k,
                                         ActionT k ->
                                         ActionT k ->
@@ -713,6 +717,14 @@ Section WfBaseMod.
   | WfReadNondet k lretT c: (forall v, WfActionT (c v)) -> @WfActionT lretT (ReadNondet k c)
   | WfReadReg r k lretT c: (forall v, WfActionT (c v)) -> In (r, k) (getKindAttr (getRegisters m)) -> @WfActionT lretT (ReadReg r k c)
   | WfWriteReg r k (e: Expr type k) lretT c: WfActionT c  -> In (r, k) (getKindAttr (getRegisters m)) -> @WfActionT lretT (WriteReg r e c)
+  | WfReadRegArrayConst r num k i lretT c: (forall v, WfActionT (c v)) -> In (r, SyntaxKind (Array num k)) (getKindAttr (getRegisters m)) ->
+                                           @WfActionT lretT (@ReadRegArrayConst type lretT r num k i c)
+  | WfReadRegArray r num k i lretT c: (forall v, WfActionT (c v)) -> In (r, SyntaxKind (Array num k)) (getKindAttr (getRegisters m)) ->
+                                      @WfActionT lretT (@ReadRegArray type lretT r num k i c)
+  | WfWriteRegArrayConst r num k i (e: Expr type (SyntaxKind k)) lretT c: WfActionT c  -> In (r, SyntaxKind (Array num k)) (getKindAttr (getRegisters m)) ->
+                                                             @WfActionT lretT (@WriteRegArrayConst type lretT r num k i e c)
+  | WfWriteRegArray r num k i (e: Expr type (SyntaxKind k)) lretT c: WfActionT c  -> In (r, SyntaxKind (Array num k)) (getKindAttr (getRegisters m)) ->
+                                                        @WfActionT lretT (@WriteRegArray type lretT r num k i e c)
   | WfIfElse p k (atrue: ActionT type k) afalse lretT c: (forall v, WfActionT (c v)) -> WfActionT atrue -> WfActionT afalse -> @WfActionT lretT (IfElse p atrue afalse c)
   | WfAssertion (e: Expr type (SyntaxKind Bool)) lretT c: WfActionT c -> @WfActionT lretT (Assertion e c)
   | WfSys ls lretT c: WfActionT c -> @WfActionT lretT (Sys ls c)
@@ -736,6 +748,10 @@ Inductive WfConcatActionT : forall lretT, ActionT type lretT -> Mod -> Prop :=
 | WfConcatReadNondet k lretT c m': (forall v, WfConcatActionT (c v) m') -> @WfConcatActionT lretT (ReadNondet k c) m'
 | WfConcatReadReg r k lretT c m': (forall v, WfConcatActionT (c v) m') -> @WfConcatActionT lretT (ReadReg r k c) m'
 | WfConcatWriteReg r k (e: Expr type k) lretT c m': WfConcatActionT c m' -> @WfConcatActionT lretT (WriteReg r e c) m'
+| WfConcatReadRegArrayConst r num k i lretT c m': (forall v, WfConcatActionT (c v) m') -> @WfConcatActionT lretT (@ReadRegArrayConst type lretT r num k i c) m'
+| WfConcatReadRegArray r num k i lretT c m': (forall v, WfConcatActionT (c v) m') -> @WfConcatActionT lretT (@ReadRegArray type lretT r num k i c) m'
+| WfConcatWriteRegArrayConst r num k i (e: Expr type (SyntaxKind k)) lretT c m': WfConcatActionT c m' -> @WfConcatActionT lretT (@WriteRegArrayConst type lretT r num k i e c) m'
+| WfConcatWriteRegArray r num k i (e: Expr type (SyntaxKind k)) lretT c m': WfConcatActionT c m' -> @WfConcatActionT lretT (@WriteRegArray type lretT r num k i e c) m'
 | WfConcatIfElse p k (atrue: ActionT type k) afalse lretT c m': (forall v, WfConcatActionT (c v) m') -> WfConcatActionT atrue m' -> WfConcatActionT afalse m' -> @WfConcatActionT lretT (IfElse p atrue afalse c) m'
 | WfConcatAssertion (e: Expr type (SyntaxKind Bool)) lretT c m': WfConcatActionT c m' -> @WfConcatActionT lretT (Assertion e c) m'
 | WfConcatSys ls lretT c m': WfConcatActionT c m' -> @WfConcatActionT lretT (Sys ls c) m'
@@ -1124,6 +1140,61 @@ Section Semantics.
       (HANewRegs: anewRegs = (r, (existT _ _ (evalExpr e))) :: newRegs)
       (HSemAction: SemAction cont readRegs newRegs calls fret):
       SemAction (WriteReg r e cont) readRegs anewRegs calls fret
+  | SemReadRegArrayConst
+      (r: string) num regT (regV: fullType type (SyntaxKind (Array num regT)))
+      retK (fret: type retK) (cont: fullType type (SyntaxKind regT) -> ActionT type retK)
+      readRegs newRegs calls areadRegs i
+      (HRegVal: In (r, existT _ (SyntaxKind (Array num regT)) regV) o)
+      (HSemAction: SemAction (cont (regV i)) readRegs newRegs calls fret)
+      (HNewReads: areadRegs = (r, existT _ (SyntaxKind (Array num regT)) regV) :: readRegs):
+      SemAction (@ReadRegArrayConst type retK r num regT i cont) areadRegs newRegs calls fret
+  | SemReadRegArray
+      (r: string) num regT (regV: fullType type (SyntaxKind (Array num regT)))
+      retK (fret: type retK) (cont: fullType type (SyntaxKind regT) -> ActionT type retK)
+      readRegs newRegs calls areadRegs (i: Expr type (SyntaxKind (Bit (Nat.log2_up num))))
+      (HRegVal: In (r, existT _ (SyntaxKind (Array num regT)) regV) o)
+      (HSemAction: SemAction (cont (match num return (Fin.t num -> fullType type (SyntaxKind regT)) ->
+                                                     fullType type (SyntaxKind regT) with
+                                    | 0 => fun _ => evalConstT (getDefaultConst regT)
+                                    | S m => fun fv => fv (natToFin m (wordToNat (@evalExpr _ i)))
+                                    end regV)) readRegs newRegs calls fret)
+      (HNewReads: areadRegs = (r, existT _ (SyntaxKind (Array num regT)) regV) :: readRegs):
+      SemAction (@ReadRegArray type retK r num regT i cont) areadRegs newRegs calls fret
+  | SemWriteRegArrayConst
+      (r: string) num k
+      (eOld: fullType type (SyntaxKind (Array num k))) i (e: Expr type (SyntaxKind k))
+      retK (fret: type retK) areadRegs
+      (cont: ActionT type retK) readRegs (newRegs: RegsT) calls anewRegs
+      (HRegVal: In (r, existT (fullType type) (SyntaxKind (Array num k)) eOld) o)
+      (HDisjRegs: key_not_In r newRegs)
+      (HAReadRegs: areadRegs = (r, existT (fullType type) (SyntaxKind (Array num k)) eOld) :: readRegs)
+      (HANewRegs: anewRegs = (r, (existT (fullType type) (SyntaxKind (Array num k))
+                                         (fun i' => match Fin_eq_dec i i' with
+                                                    | left _ => evalExpr e
+                                                    | _ => eOld i'
+                                                    end)
+                             )) :: newRegs)
+      (HSemAction: SemAction cont readRegs newRegs calls fret):
+      SemAction (WriteRegArrayConst r i e cont) areadRegs anewRegs calls fret
+  | SemWriteRegArray
+      (r: string) num k
+      (eOld: fullType type (SyntaxKind (Array num k))) (i: Expr type (SyntaxKind (Bit (Nat.log2_up num)))) (e: Expr type (SyntaxKind k))
+      retK (fret: type retK) areadRegs
+      (cont: ActionT type retK) readRegs (newRegs: RegsT) calls anewRegs
+      (HRegVal: In (r, existT (fullType type) (SyntaxKind (Array num k)) eOld) o)
+      (HDisjRegs: key_not_In r newRegs)
+      (HAReadRegs: areadRegs = (r, existT (fullType type) (SyntaxKind (Array num k)) eOld) :: readRegs)
+      (HANewRegs: anewRegs = (r, (existT (fullType type) (SyntaxKind (Array num k))
+                                         (match num return fullType type (SyntaxKind (Array num k)) -> Fin.t num -> fullType type (SyntaxKind k) with
+                                          | 0 => fun _ _ => evalConstT (getDefaultConst k)
+                                          | S m => fun eOld i'' => match Fin_eq_dec (natToFin m (wordToNat (@evalExpr _ i))) i'' with
+                                                                   | left _ => evalExpr e
+                                                                   | _ => eOld i''
+                                                                   end
+                                          end eOld)
+                             )) :: newRegs)
+      (HSemAction: SemAction cont readRegs newRegs calls fret):
+      SemAction (WriteRegArray r num i e cont) areadRegs anewRegs calls fret
   | SemIfElseTrue
       (p: Expr type (SyntaxKind Bool)) k1
       (a: ActionT type k1)
@@ -1230,6 +1301,61 @@ Section Semantics.
       (HANewRegs: anewRegs [=] (r, (existT _ _ (evalExpr e))) :: newRegs)
       (HPSemAction: PSemAction cont readRegs newRegs calls fret):
       PSemAction (WriteReg r e cont) readRegs anewRegs calls fret
+  | PSemReadRegArrayConst
+      (r: string) num regT (regV: fullType type (SyntaxKind (Array num regT)))
+      retK (fret: type retK) (cont: fullType type (SyntaxKind regT) -> ActionT type retK)
+      readRegs newRegs calls areadRegs i
+      (HRegVal: In (r, existT _ (SyntaxKind (Array num regT)) regV) o)
+      (HSemAction: PSemAction (cont (regV i)) readRegs newRegs calls fret)
+      (HNewReads: areadRegs [=] (r, existT _ (SyntaxKind (Array num regT)) regV) :: readRegs):
+      PSemAction (@ReadRegArrayConst type retK r num regT i cont) areadRegs newRegs calls fret
+  | PSemReadRegArray
+      (r: string) num regT (regV: fullType type (SyntaxKind (Array num regT)))
+      retK (fret: type retK) (cont: fullType type (SyntaxKind regT) -> ActionT type retK)
+      readRegs newRegs calls areadRegs (i: Expr type (SyntaxKind (Bit (Nat.log2_up num))))
+      (HRegVal: In (r, existT _ (SyntaxKind (Array num regT)) regV) o)
+      (HSemAction: PSemAction (cont (match num return (Fin.t num -> fullType type (SyntaxKind regT)) ->
+                                                      fullType type (SyntaxKind regT) with
+                                     | 0 => fun _ => evalConstT (getDefaultConst regT)
+                                     | S m => fun fv => fv (natToFin m (wordToNat (@evalExpr _ i)))
+                                     end regV)) readRegs newRegs calls fret)
+      (HNewReads: areadRegs [=] (r, existT _ (SyntaxKind (Array num regT)) regV) :: readRegs):
+      PSemAction (@ReadRegArray type retK r num regT i cont) areadRegs newRegs calls fret
+  | PSemWriteRegArrayConst
+      (r: string) num k
+      (eOld: fullType type (SyntaxKind (Array num k))) i (e: Expr type (SyntaxKind k))
+      retK (fret: type retK) areadRegs
+      (cont: ActionT type retK) readRegs (newRegs: RegsT) calls anewRegs
+      (HRegVal: In (r, existT (fullType type) (SyntaxKind (Array num k)) eOld) o)
+      (HDisjRegs: key_not_In r newRegs)
+      (HAReadRegs: areadRegs [=] (r, existT (fullType type) (SyntaxKind (Array num k)) eOld) :: readRegs)
+      (HANewRegs: anewRegs [=] (r, (existT (fullType type) (SyntaxKind (Array num k))
+                                         (fun i' => match Fin_eq_dec i i' with
+                                                    | left _ => evalExpr e
+                                                    | _ => eOld i'
+                                                    end)
+                             )) :: newRegs)
+      (HSemAction: PSemAction cont readRegs newRegs calls fret):
+      PSemAction (WriteRegArrayConst r i e cont) areadRegs anewRegs calls fret
+  | PSemWriteRegArray
+      (r: string) num k
+      (eOld: fullType type (SyntaxKind (Array num k))) (i: Expr type (SyntaxKind (Bit (Nat.log2_up num)))) (e: Expr type (SyntaxKind k))
+      retK (fret: type retK) areadRegs
+      (cont: ActionT type retK) readRegs (newRegs: RegsT) calls anewRegs
+      (HRegVal: In (r, existT (fullType type) (SyntaxKind (Array num k)) eOld) o)
+      (HDisjRegs: key_not_In r newRegs)
+      (HAReadRegs: areadRegs [=] (r, existT (fullType type) (SyntaxKind (Array num k)) eOld) :: readRegs)
+      (HANewRegs: anewRegs [=] (r, (existT (fullType type) (SyntaxKind (Array num k))
+                                         (match num return fullType type (SyntaxKind (Array num k)) -> Fin.t num -> fullType type (SyntaxKind k) with
+                                          | 0 => fun _ _ => evalConstT (getDefaultConst k)
+                                          | S m => fun eOld i'' => match Fin_eq_dec (natToFin m (wordToNat (@evalExpr _ i))) i'' with
+                                                                   | left _ => evalExpr e
+                                                                   | _ => eOld i''
+                                                                   end
+                                          end eOld)
+                             )) :: newRegs)
+      (HSemAction: PSemAction cont readRegs newRegs calls fret):
+      PSemAction (WriteRegArray r num i e cont) areadRegs anewRegs calls fret
   | PSemIfElseTrue
       (p: Expr type (SyntaxKind Bool)) k1
       (a: ActionT type k1)
@@ -1850,6 +1976,14 @@ Fixpoint getCallsWithSign k (a: ActionT (fun _ => unit) k) :=
     end cont
   | WriteReg r k' expr cont =>
     getCallsWithSign cont
+  | ReadRegArrayConst r num k' i cont =>
+    getCallsWithSign (cont tt)
+  | ReadRegArray r num k' i cont =>
+    getCallsWithSign (cont tt)
+  | WriteRegArrayConst r num k' i expr cont =>
+    getCallsWithSign cont
+  | WriteRegArray r num k' i expr cont =>
+    getCallsWithSign cont
   | Assertion pred cont => getCallsWithSign cont
   | Sys ls cont => getCallsWithSign cont
   | IfElse pred ktf t f cont =>
@@ -1962,6 +2096,14 @@ Section inlineSingle.
       ReadReg r k (fun ret => inlineSingle (c ret))
     | WriteReg r k e a =>
       WriteReg r e (inlineSingle a)
+    | ReadRegArrayConst r num k i c =>
+      ReadRegArrayConst r k i (fun ret => inlineSingle (c ret))
+    | ReadRegArray r num k i c =>
+      ReadRegArray r num k i (fun ret => inlineSingle (c ret))
+    | WriteRegArrayConst r num k i e a =>
+      WriteRegArrayConst r i e (inlineSingle a)
+    | WriteRegArray r num k i e a =>
+      WriteRegArray r num i e (inlineSingle a)
     | IfElse p _ aT aF c =>
       IfElse p (inlineSingle aT) (inlineSingle aF) (fun ret => inlineSingle (c ret))
     | Assertion e c =>

@@ -566,13 +566,17 @@ Proof.
   - econstructor 4; eauto.
   - econstructor 5; eauto.
   - econstructor 6; eauto.
-  - econstructor 7; eauto; [eapply IHPSemAction1|eapply IHPSemAction2];
-      intro; apply H1; rewrite HUCalls, map_app, in_app_iff;[left|right]; assumption.
-  - econstructor 8; eauto; [eapply IHPSemAction1|eapply IHPSemAction2];
-      intro; apply H1; rewrite HUCalls, map_app, in_app_iff;[left|right]; assumption.
+  - econstructor 7; eauto.
+  - econstructor 8; eauto.
   - econstructor 9; eauto.
   - econstructor 10; eauto.
-  - econstructor 11; eauto.
+  - econstructor 11; eauto; [eapply IHPSemAction1|eapply IHPSemAction2];
+      intro; apply H1; rewrite HUCalls, map_app, in_app_iff;[left|right]; assumption.
+  - econstructor 12; eauto; [eapply IHPSemAction1|eapply IHPSemAction2];
+      intro; apply H1; rewrite HUCalls, map_app, in_app_iff;[left|right]; assumption.
+  - econstructor 13; eauto.
+  - econstructor 14; eauto.
+  - econstructor 15; eauto.
 Qed.
 
 Inductive PSemAction_meth_collector (f : DefMethT) (o : RegsT) : RegsT -> RegsT -> MethsT -> MethsT -> Prop :=
@@ -805,12 +809,24 @@ Lemma PSemAction_NoDup_Key_Writes k o (a : ActionT type k) readRegs newRegs call
   NoDup (map fst newRegs).
 Proof.
   induction 1;
-    eauto;[|
-           rewrite HANewRegs; simpl; econstructor; eauto; intro;
-           specialize (fst_produce_snd _ _ H0) as TMP; dest; specialize (HDisjRegs x);
-           contradiction| | |subst; econstructor];
-    rewrite HUNewRegs; rewrite map_app,NoDup_app_iff; repeat split; eauto;
-        repeat intro; specialize (HDisjRegs a0); firstorder.
+    eauto;
+  [| rewrite HANewRegs; simpl; econstructor; eauto; intro;
+     specialize (fst_produce_snd _ _ H0) as TMP; dest; specialize (HDisjRegs x);
+     contradiction| | | | |subst; econstructor];
+  try (rewrite HUNewRegs; rewrite map_app,NoDup_app_iff; repeat split; eauto;
+       repeat intro; specialize (HDisjRegs a0); firstorder).
+  - rewrite HANewRegs; simpl.
+    eapply NoDup_cons; eauto.
+    rewrite in_map_iff; intro; dest; subst.
+    unfold key_not_In in *.
+    destruct x.
+    specialize (HDisjRegs s0); simpl in *; auto.
+  - rewrite HANewRegs; simpl.
+    eapply NoDup_cons; eauto.
+    rewrite in_map_iff; intro; dest; subst.
+    unfold key_not_In in *.
+    destruct x.
+    specialize (HDisjRegs s0); simpl in *; auto.
 Qed.
 
 Corollary PSemAction_NoDup_Writes k o (a : ActionT type k) readRegs newRegs calls (fret : type k) :
@@ -971,6 +987,58 @@ Proof.
     + eapply IHa; eauto.
       rewrite HANewRegs in H1; intro k0; specialize (H1 k0); simpl in *.
       clear - H1; firstorder fail.
+  - inv H0; EqDep_subst.
+    simpl; econstructor 7.
+    + apply HRegVal.
+    + eapply H; eauto.
+    + rewrite HNewReads.
+      symmetry.
+      apply Permutation_middle.
+  - inv H0; EqDep_subst.
+    simpl; econstructor 8.
+    + apply HRegVal.
+    + eapply H; eauto.
+    + rewrite HNewReads.
+      symmetry.
+      apply Permutation_middle.
+  - inv H; EqDep_subst.
+    simpl; econstructor 9; auto.
+    + apply HRegVal.
+    + assert (key_not_In r (newRegs'++newRegs0));[|apply H].
+      intro; rewrite in_app_iff.
+      specialize (HDisjRegs v).
+      intro; destruct H; auto.
+      apply (in_map fst) in H; simpl in *.
+      rewrite HANewRegs in H1; specialize (H1 r).
+      destruct H1;[contradiction|apply H1; left; reflexivity].
+    + rewrite HAReadRegs.
+      symmetry.
+      apply Permutation_middle.
+    + rewrite HANewRegs.
+      rewrite Permutation_app_comm; simpl.
+      apply perm_skip, Permutation_app_comm.
+    + eapply IHa; eauto.
+      rewrite HANewRegs in H1; intro k0; specialize (H1 k0); simpl in *.
+      clear - H1; firstorder fail.
+  - inv H; EqDep_subst.
+    simpl; econstructor 10; auto.
+    + apply HRegVal.
+    + assert (key_not_In r (newRegs'++newRegs0));[|apply H].
+      intro; rewrite in_app_iff.
+      specialize (HDisjRegs v).
+      intro; destruct H; auto.
+      apply (in_map fst) in H; simpl in *.
+      rewrite HANewRegs in H1; specialize (H1 r).
+      destruct H1;[contradiction|apply H1; left; reflexivity].
+    + rewrite HAReadRegs.
+      symmetry.
+      apply Permutation_middle.
+    + rewrite HANewRegs.
+      rewrite Permutation_app_comm; simpl.
+      apply perm_skip, Permutation_app_comm.
+    + eapply IHa; eauto.
+      rewrite HANewRegs in H1; intro k0; specialize (H1 k0); simpl in *.
+      clear - H1; firstorder fail.
   - inv H0; EqDep_subst; simpl.
     + specialize (Permutation_filter (called_by f) HUCalls) as HC1.
       rewrite filter_app, (collector_called_by_filter_irrel H3), notIn_filter_nil, app_nil_r in HC1; auto.
@@ -980,7 +1048,7 @@ Proof.
       rewrite HC1 in H3.
       specialize (collector_split _ _ H3) as TMP; destruct TMP as [sreads1 [sreads2 [supds1 [supds2 [scalls1 [scalls2 TMP]]]]]].
       destruct TMP as [HRr12 [HNr12 [HC12 [HDisjs12 [HCol1 HCol2]]]]].
-      econstructor 7.
+      econstructor 11.
       * rewrite HNr12, HUNewRegs in H2.
         specialize (collector_NoDupRegs1 H3); rewrite HNr12, map_app; intros TMP.
         assert (DisjKey (supds1++newRegs1) (supds2++newRegs2));[|apply H0].
@@ -1032,7 +1100,7 @@ Proof.
       rewrite HC1 in H3.
       specialize (collector_split _ _ H3) as TMP; destruct TMP as [sreads1 [sreads2 [supds1 [supds2 [scalls1 [scalls2 TMP]]]]]].
       destruct TMP as [HRr12 [HNr12 [HC12 [HDisjs12 [HCol1 HCol2]]]]].
-      econstructor 8.
+      econstructor 12.
       * rewrite HNr12, HUNewRegs in H2.
         specialize (collector_NoDupRegs1 H3); rewrite HNr12, map_app; intros TMP.
         assert (DisjKey (supds1++newRegs1) (supds2++newRegs2));[|apply H0].
@@ -1077,15 +1145,15 @@ Proof.
         apply Permutation_app_tail.
         apply Permutation_app_comm.
   - inv H; EqDep_subst.
-    econstructor 9; eauto.
+    econstructor 13; eauto.
   - inv H; EqDep_subst.
-    econstructor 10; eauto.
+    econstructor 14; eauto.
   - inv H; EqDep_subst.
     apply app_eq_nil in HCalls; dest; subst.
     inv H2; simpl in *.
-    + econstructor 11; eauto.
+    + econstructor 15; eauto.
     + apply Permutation_nil in H7; discriminate.
-Qed.  
+Qed.
 
 Lemma Substeps_permutation_invariant m o l l' :
   l [=] l' ->
@@ -4949,6 +5017,54 @@ Proof.
       clear - H1 HDisjRegs.
       rewrite key_not_In_fst, H1, map_app, in_app_iff in *; firstorder.
   - inv H0; EqDep_subst.
+    specialize (H _ _ _ _ _ HSemAction); dest.
+    exists x, ((r, existT (fullType type) _ regV) ::x0), x1, x2, x3, x4, x5.
+    repeat split; eauto.
+    + rewrite HNewReads, H0; simpl; apply Permutation_middle.
+    + econstructor; eauto.
+  - inv H0; EqDep_subst.
+    specialize (H _ _ _ _ _ HSemAction); dest.
+    exists x, ((r, existT (fullType type) _ regV) ::x0), x1, x2, x3, x4, x5.
+    repeat split; eauto.
+    + rewrite HNewReads, H0; simpl; apply Permutation_middle.
+    + econstructor; eauto.
+  - inv H; EqDep_subst.
+    specialize (IHa _ _ _ _ HSemAction); dest.
+    exists x, ((r, existT (fullType type) (SyntaxKind (Array num k)) eOld) :: x0), x1,
+    ((r, existT (fullType type) (SyntaxKind (Array num k)) (fun i' => if Fin_eq_dec i i' then evalExpr val else eOld i'))::x2), x3, x4, x5.
+    repeat split; eauto.
+    + rewrite key_not_In_fst in HDisjRegs; rewrite H1, map_app, in_app_iff in HDisjRegs.
+      clear - HDisjRegs H.
+      intro k0; specialize (H k0); simpl.
+      destruct (string_dec r k0); subst; simpl in *; firstorder.
+    + rewrite HAReadRegs, H0; simpl; apply Permutation_middle.
+    + rewrite HANewRegs, H1; simpl; apply Permutation_middle.
+    + econstructor; repeat auto.
+      * auto.
+      * clear - H1 HDisjRegs.
+        rewrite key_not_In_fst, H1, map_app, in_app_iff in *; firstorder.
+  - inv H; EqDep_subst.
+    specialize (IHa _ _ _ _ HSemAction); dest.
+    exists x, ((r, existT (fullType type) (SyntaxKind (Array num k)) eOld) :: x0), x1,
+    ((r, existT (fullType type) (SyntaxKind (Array num k))
+                (match num return (fullType type (SyntaxKind (Array num k)) -> Fin.t num -> fullType type (SyntaxKind k)) with
+                 | 0 => fun (_ : fullType type (SyntaxKind (Array 0 k))) (_ : Fin.t 0) => evalConstT Default
+                 | S m =>
+                   fun (eOld : fullType type (SyntaxKind (Array (S m) k))) (i'' : Fin.t (S m)) =>
+                     if Fin_eq_dec (natToFin m # (evalExpr i)) i'' then evalExpr val else eOld i''
+                 end eOld))::x2), x3, x4, x5.
+    repeat split; eauto.
+    + rewrite key_not_In_fst in HDisjRegs; rewrite H1, map_app, in_app_iff in HDisjRegs.
+      clear - HDisjRegs H.
+      intro k0; specialize (H k0); simpl.
+      destruct (string_dec r k0); subst; simpl in *; firstorder.
+    + rewrite HAReadRegs, H0; simpl; apply Permutation_middle.
+    + rewrite HANewRegs, H1; simpl; apply Permutation_middle.
+    + econstructor; repeat auto.
+      * auto.
+      * clear - H1 HDisjRegs.
+        rewrite key_not_In_fst, H1, map_app, in_app_iff in *; firstorder.
+  - inv H0; EqDep_subst.
     + specialize (IHa1 _ _ _ _ HAction); dest.
       specialize (H _ _ _ _ _ HPSemAction); dest.
       rewrite H2, H7 in HDisjRegs.
@@ -5002,7 +5118,7 @@ Proof.
       * apply PSemAction_meth_collector_stitch; auto.
         clear - HDisjRegs.
         intro k; specialize (HDisjRegs k); repeat rewrite map_app, in_app_iff in *; firstorder.
-      * econstructor 8.
+      * econstructor 12.
         -- assert (DisjKey x2 x9) as P1;[|apply P1].
            clear - HDisjRegs; intro k; specialize (HDisjRegs k).
            repeat rewrite map_app, in_app_iff in *; firstorder.
@@ -5028,7 +5144,7 @@ Proof.
     + intro; simpl; tauto.
     + constructor.
     + constructor; auto.
-Qed.
+Admitted.
 
 Lemma inlineSingle_Rule_in_list_notKey rn0 rn rb f l:
   rn <> rn0 ->

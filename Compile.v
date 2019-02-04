@@ -1,3 +1,4 @@
+(*
 Require Import Syntax Rtl.
 
 Set Implicit Arguments.
@@ -644,3 +645,4 @@ Definition rtlGet m pgs :=
 
 Definition makeRtl (m: ModWfOrd) pgs :=
   getRtl_full (getHidden m, (fst (separateBaseMod m), inlineAll_All_mod (mergeSeparatedBaseMod (snd (separateBaseMod m))))) pgs (modOrd m).
+*)
