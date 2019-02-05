@@ -5144,7 +5144,7 @@ Proof.
     + intro; simpl; tauto.
     + constructor.
     + constructor; auto.
-Admitted.
+Qed.
 
 Lemma inlineSingle_Rule_in_list_notKey rn0 rn rb f l:
   rn <> rn0 ->
