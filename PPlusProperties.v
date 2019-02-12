@@ -6430,3 +6430,17 @@ Proof.
   unfold inlined_ModWf.
   eauto using flatten_inline_remove_TraceInclusion.
 Qed.
+
+Lemma simpliedRuleTrace m o calls lr:
+  ruleScheduleTrace m o calls lr ->
+  exists (tl : list (RegsT * ((list RuleOrMeth) * MethsT))),
+    PPlusTrace m o tl /\ calls [=] (concat (map PPT_calls tl)).
+Proof.
+  intros; destruct H.
+  induction H0; subst.
+  - exists nil; split; simpl in *; auto.
+    econstructor 1; eauto.
+  - specialize (IHRuleSetTrace H).
+    dest.
+    exists ls; split; auto.
+Qed.

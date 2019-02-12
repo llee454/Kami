@@ -1536,7 +1536,7 @@ Open Scope Z_scope.
 
 Notation PPT_execs := (fun x => fst (snd x)).
 Notation PPT_calls := (fun x => snd (snd x)).
-
+Notation PPT_upds  := (fun x => fst x).
 (*
   Proves that the number of method calls returned
   by [getNumCalls] is always greater than or
@@ -1884,35 +1884,27 @@ End PPlusTrace.
 
 Section RuleSetTrace.
   Variable m: BaseModule.
-  Inductive RuleSetTrace : RegsT -> list (RegsT * ((list RuleOrMeth) * MethsT)) ->
-                           list RuleT ->Prop :=
-  | RuleSetInitTrace (o' o'' : RegsT) ls' lr
+  Inductive RuleSetTrace : RegsT -> MethsT -> list string ->Prop :=
+  | RuleSetInitTrace (o' o'' : RegsT) calls lr
                      (HPerm : o' [=] o'')
                      (HUpdRegs : Forall2 regInit o'' (getAllRegisters m))
-                     (HTrace: ls' = nil)
-                     (HRules: lr = nil):
-      RuleSetTrace o' ls' lr
-  | RuleeSetContinueTrace (o o' : RegsT)
-                          (upds : RegsT)
-                          (execs : list RuleOrMeth)
-                          (calls : MethsT)
-                          (lr lr' : list RuleT)
-                          (rle : RuleT)
-                          (HRules: lr = rle::lr')
-                          (Hexecs : execs = [Rle (fst rle)])
-                          (ls ls' : list (RegsT *((list RuleOrMeth) * MethsT)))
-                          (RuleSetOldTrace : RuleSetTrace o ls lr)
-                          (HPPlusStep : PPlusStep m o upds execs calls)
-                          (HUpdRegs : PPlusUpdRegs upds o o')
-                          (HRuleSetTrace : ls' =((upds, (execs, calls))::ls)):
-      RuleSetTrace o' ls' lr'.
+                     (HTrace: calls = nil):
+      RuleSetTrace o' calls lr
+  | RuleSetContinueTrace (o o' : RegsT) oldCalls newCalls lr
+                         (ls : list (RegsT *((list RuleOrMeth) * MethsT)))
+                         (RuleSetOldTrace : RuleSetTrace o' oldCalls lr)
+                         (PPlusTraceIter : PPlusTrace m o ls)
+                         (Sheduled : map Rle lr = concat (map PPT_execs ls))
+                         (HNewCalls : newCalls++oldCalls [=] concat (map PPT_calls ls)):
+      RuleSetTrace o (newCalls++oldCalls) lr.
 End RuleSetTrace.
 
-Fixpoint repeat_list {A : Type} (l : list A) (n : nat) : list A :=
-  match n with
-  | O => nil
-  | S m => l++(repeat_list l m)
-  end.
+Definition rule_schedule (m : BaseModule) (l : list string) : Prop :=
+  SubList l (map fst (getRules m)) /\ NoDup l.
+
+Definition ruleScheduleTrace (m : BaseModule) (o : RegsT) (calls : MethsT)
+  (lr : list string) : Prop :=
+  rule_schedule m lr /\ RuleSetTrace m o calls lr.
 
 Definition WeakInclusion (l1 : list FullLabel) (l2 : list FullLabel) : Prop :=
   (forall f, getListFullLabel_diff f l1 = getListFullLabel_diff f l2) /\
@@ -1947,7 +1939,6 @@ Section PPlusTraceInclusion.
     (forall (f : MethT), (getListFullLabel_diff_flat f t1 = getListFullLabel_diff_flat f t2)%Z) /\
     ((exists rle, In (Rle rle) (PPT_execs t2)) ->
      (exists rle, In (Rle rle) (PPT_execs t1))).
-
 
   Inductive WeakInclusions_flat : list (RegsT * ((list RuleOrMeth) * MethsT)) -> list (RegsT *((list RuleOrMeth) * MethsT)) -> Prop :=
   |WIf_Nil : WeakInclusions_flat nil nil
