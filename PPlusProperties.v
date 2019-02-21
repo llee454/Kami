@@ -6431,16 +6431,214 @@ Proof.
   eauto using flatten_inline_remove_TraceInclusion.
 Qed.
 
-Lemma simpliedRuleTrace m o calls lr:
-  ruleScheduleTrace m o calls lr ->
+Lemma RuleSetTrace_perm_calls m o calls calls' n lr:
+  calls [=] calls' ->
+  RuleSetTrace m o calls n lr ->
+  RuleSetTrace m o calls' n lr.
+Proof.
+  intros.
+  unfold RuleSetTrace in *; dest.
+  exists x; repeat split; auto.
+  rewrite <- H; auto.
+Qed.
+
+Lemma RSSubsteps_nil m o o' calls lr:
+  lr = nil ->
+  RSSubsteps m o o' calls lr ->
+  calls = nil /\ o [=] o'.
+Proof.
+  induction 2; auto.
+  rewrite H in *; discriminate.
+Qed.
+
+Lemma RSTrace_PPlusTrace_nil m o calls lr:
+  lr = nil ->
+  RSTrace m o calls lr ->
+  PPlusTrace m o nil /\
+  calls = nil.
+Proof.
+  induction 2.
+  - split; auto.
+    econstructor 1; eauto.
+  - split.
+    + specialize (RSSubsteps_nil H HRSSubsteps) as P0; dest; rewrite H in *.
+      specialize (IHRSTrace (eq_refl _)); dest.
+      inv H3.
+      * econstructor 1.
+        -- rewrite <- H2, HPerm; reflexivity.
+        -- assumption.
+        -- assumption.
+      * discriminate.
+    + rewrite H in *.
+      specialize (IHRSTrace (eq_refl _)); dest.
+      inv HRSSubsteps; simpl in *.
+      * apply Permutation_sym, Permutation_nil in HNewCalls.
+        assumption.
+      * discriminate.
+Qed.
+
+Lemma PPlusTrace_Continute_RSSubsteps m o o' ls calls lr (noMeth : (getMethods m = nil)):
+  PPlusTrace m o ls ->
+  RSSubsteps m o o' calls lr ->
+  exists ls',
+    PPlusTrace m o' ls' /\
+    concat (map PPT_execs ls') = map Rle lr ++ concat (map PPT_execs ls)/\
+    concat (map PPT_calls ls') [=] calls ++ (concat (map PPT_calls ls)).
+Proof.
+  induction 2.
+  - exists ls; simpl; repeat split; auto.
+  - specialize (IHRSSubsteps H); dest.
+    exists ((u, ([Rle rn], cs))::x).
+    simpl; repeat split; auto.
+    + econstructor 2; eauto.
+      econstructor 1.
+      * econstructor 2.
+        -- clear - H0.
+           inv H0; auto.
+        -- apply HInRules.
+        -- apply HPAction.
+        -- assumption.
+        -- assumption.
+        -- rewrite app_nil_end at 1; reflexivity.
+        -- reflexivity.
+        -- rewrite app_nil_end at 1; reflexivity.
+        -- apply DisjKey_nil_l.
+        -- intros; inv H4.
+        -- econstructor.
+           clear - H0.
+           inv H0; auto.
+      * unfold MatchingExecCalls_flat; simpl; intros.
+        rewrite noMeth in H4; simpl in *; tauto.
+    + rewrite HruleCons, H2; simpl; reflexivity.
+    + rewrite HCalls, H3, app_assoc; simpl; reflexivity.
+Qed.
+
+Lemma RSTrace_RuleSetTrace (m : BaseModule) (o : RegsT) (calls : MethsT) (lr : list string)
+      (noMeth : (getMethods m = nil)):
+  directRSTrace m o calls lr -> exists n, ruleScheduleTrace m o calls n lr.
+Proof.
+  intros.
+  destruct H.
+  induction H0.
+  - exists 0.
+    split; auto.
+    rewrite HRSTrace in *.
+    unfold RuleSetTrace; exists nil; simpl; repeat split; auto.
+    econstructor 1; eauto.
+  - specialize (IHRSTrace H); dest.
+    exists (S x).
+    unfold ruleScheduleTrace in *; dest.
+    split; auto.
+    unfold RuleSetTrace in *; dest.
+    specialize (PPlusTrace_Continute_RSSubsteps noMeth H2 HRSSubsteps) as P1; dest.
+    exists x1; repeat split; auto.
+    + rewrite HNewCalls, H7, H3; reflexivity.
+    + simpl; rewrite map_app, H4, H6; reflexivity.
+Qed.
+
+Lemma no_execs_PPlusSubsteps m o upds execs calls :
+  execs = nil ->
+  PPlusSubsteps m o upds execs calls ->
+  upds = nil /\ calls = nil.
+Proof.
+  induction 2.
+  - split; auto.
+  - subst.
+    apply Permutation_nil in HExecs; discriminate.
+  - subst; apply Permutation_nil in HExecs; discriminate.
+Qed.
+
+Lemma no_execs_PPlusStep m o upds execs calls :
+  execs = nil ->
+  PPlusStep m o upds execs calls ->
+  upds = nil /\ calls = nil.
+Proof.
+  induction 2.
+  apply (no_execs_PPlusSubsteps H H0).
+Qed.
+
+Lemma Perm_pair_length {A : Type} (l : list (string * A)):
+  forall (l' : list (string * A)), 
+  map fst l [=] map fst l' ->
+  length l = length l'.
+Proof.
+  induction l; auto; intros.
+  - apply Permutation_nil in H.
+    destruct l'; auto.
+    simpl in H; discriminate.
+  - apply key_perm_eq in H; dest.
+    assert (In (fst a) (map fst x)); [rewrite <- H0; apply in_eq|].
+    rewrite in_map_iff in H1; dest.
+    apply in_split in H2; dest.
+    rewrite H2 in H0; simpl in *; rewrite <- H1 in H0.
+    rewrite map_app in H0; simpl in *.
+    assert (map fst l [=] (map fst (x1++x2)));
+      [rewrite map_app; apply (Permutation_cons_inv (a:=(fst x0))); rewrite H0;
+       apply Permutation_sym, Permutation_cons_app, Permutation_refl|].
+    specialize (IHl _ H3).
+    rewrite IHl, H, H2; repeat rewrite app_length; simpl; auto.
+Qed.
+
+Lemma PPlusUpdRegs_nil o o' (noDupRegs : NoDup (map fst o)):
+  PPlusUpdRegs [] o o' -> o [=] o'.
+Proof.
+  intros.
+  inv H; simpl in *.
+  assert (map fst o [=] map fst o');
+    [repeat rewrite GKA_fst;rewrite H0; reflexivity|].
+  assert (NoDup (map fst o'));[rewrite <-H; assumption|].
+  apply Permutation_sym, NoDup_Permutation_bis.
+  - clear -H2.
+    induction o'; econstructor.
+    + intro; simpl in *; rewrite NoDup_cons_iff in *; dest.
+      apply H0; rewrite in_map_iff; exists a; split; auto.
+    + apply IHo'.
+      simpl in *; rewrite NoDup_cons_iff in *; dest; auto.
+  - clear -noDupRegs.
+    induction o; econstructor.
+    + intro; inv noDupRegs.
+      apply H2.
+      rewrite in_map_iff; exists a.
+      split; auto.
+    + eapply IHo.
+      simpl in *.
+      rewrite NoDup_cons_iff in *; dest; auto.
+  - apply Nat.eq_le_incl.
+    apply Perm_pair_length; assumption.
+  - repeat intro; destruct a.
+    specialize (H1 _ _ H3).
+    inv H1;[contradiction|dest; auto].
+Qed.
+
+Lemma PPlusTrace_rewrite_regs m o o' ls :
+  o [=] o' -> PPlusTrace m o ls -> PPlusTrace m o' ls.
+Proof.
+  induction 2.
+  - econstructor 1.
+    + rewrite <- H, HPerm; reflexivity.
+    + assumption.
+    + assumption.
+  - rewrite HPPlusTrace in *.
+    econstructor 2.
+    + apply H0.
+    + apply HPPlusStep.
+    + unfold PPlusUpdRegs in *; split; intros; dest.
+      * rewrite <- H; assumption.
+      * apply H3.
+        rewrite H; assumption.
+    + reflexivity.
+Qed.
+
+Lemma simpliedRuleTrace m o calls lr (noMeth : (getMethods m) = nil):
+  directRSTrace m o calls lr ->
   exists (tl : list (RegsT * ((list RuleOrMeth) * MethsT))),
     PPlusTrace m o tl /\ calls [=] (concat (map PPT_calls tl)).
 Proof.
+  intros.
+  apply (RSTrace_RuleSetTrace noMeth) in H; dest.
   intros; destruct H.
-  induction H0; subst.
-  - exists nil; split; simpl in *; auto.
-    econstructor 1; eauto.
-  - specialize (IHRuleSetTrace H).
-    dest.
-    exists ls; split; auto.
+  unfold RuleSetTrace in *; dest.
+  exists x0; split; auto.
 Qed.
+
+

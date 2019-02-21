@@ -1881,52 +1881,47 @@ Section PPlusTrace.
       PPlusTrace o' ls'.
 End PPlusTrace.
 
+Fixpoint repeat_list {A : Type} (n : nat) (l : list A) : list A :=
+  match n with
+  | O => nil
+  | S m => l++(repeat_list m l)
+  end.
 
-Section RuleSetTrace.
-  Variable m: BaseModule.
-  Inductive RuleSetTrace : RegsT -> MethsT -> list string ->Prop :=
-  | RuleSetInitTrace (o' o'' : RegsT) calls lr
-                     (HPerm : o' [=] o'')
-                     (HUpdRegs : Forall2 regInit o'' (getAllRegisters m))
-                     (HTrace: calls = nil):
-      RuleSetTrace o' calls lr
-  | RuleSetContinueTrace (o o' : RegsT) oldCalls newCalls lr
-                         (ls : list (RegsT *((list RuleOrMeth) * MethsT)))
-                         (RuleSetOldTrace : RuleSetTrace o' oldCalls lr)
-                         (PPlusTraceIter : PPlusTrace m o ls)
-                         (Sheduled : map Rle lr = concat (map PPT_execs ls))
-                         (HNewCalls : newCalls++oldCalls [=] concat (map PPT_calls ls)):
-      RuleSetTrace o (newCalls++oldCalls) lr.
-End RuleSetTrace.
+Definition RuleSetTrace (m : BaseModule) (o : RegsT) (calls : MethsT)
+           (n : nat) (lr : list string) :=
+  exists (ls : list (RegsT * ((list RuleOrMeth) * MethsT))),
+    (PPlusTrace m o ls) /\
+    (calls [=] concat (map PPT_calls ls)) /\
+    (map Rle (repeat_list n lr) = concat (map PPT_execs ls)).
 
 Definition rule_schedule (m : BaseModule) (l : list string) : Prop :=
   SubList l (map fst (getRules m)) /\ NoDup l.
 
-Definition ruleScheduleTrace (m : BaseModule) (o : RegsT) (calls : MethsT)
+Definition ruleScheduleTrace (m : BaseModule) (o : RegsT) (calls : MethsT) (n : nat)
   (lr : list string) : Prop :=
-  rule_schedule m lr /\ RuleSetTrace m o calls lr.
+  rule_schedule m lr /\ RuleSetTrace m o calls n lr.
 
 Section DirectRuleSetTrace.
   Variable m : BaseModule.
   
-  Inductive RSSubsteps : RegsT -> MethsT -> list string -> Prop :=
+  Inductive RSSubsteps : RegsT -> RegsT -> MethsT -> list string -> Prop :=
   | NilRSSubsteps o (HRegs: getKindAttr o [=] getKindAttr (getRegisters m)) :
-      RSSubsteps o nil nil
-  | RSContinueSubsteps rn rb rl rl' o o'
+      RSSubsteps o o nil nil
+  | RSContinueSubsteps rn rb rl rl' o o' o''
       (HRegs: getKindAttr o [=] getKindAttr (getRegisters m))
       (HruleCons : rl = rn::rl')
       (HInRules: In (rn, rb) (getRules m))
       reads u cs
-      (HPAction: PSemAction o (rb type) reads u cs WO)
+      (HPAction: PSemAction o' (rb type) reads u cs WO)
       (HReadsGood: SubList (getKindAttr reads)
                            (getKindAttr (getRegisters m)))
       (HUpdGood: SubList (getKindAttr u)
                          (getKindAttr (getRegisters m)))
       calls oldCalls
       (HCalls: calls [=] cs ++ oldCalls)
-      (HUpdRegs : PPlusUpdRegs u o o')
-      (HDirectRuleSetTrace: RSSubsteps o oldCalls rl'):
-      RSSubsteps o' calls rl.
+      (HUpdRegs : PPlusUpdRegs u o' o)
+      (HDirectRuleSetTrace: RSSubsteps o'' o' oldCalls rl'):
+      RSSubsteps o'' o calls rl.
 
   Inductive RSTrace : RegsT -> MethsT -> list string -> Prop :=
   | RSInitTrace (o' o'' : RegsT) calls lr
@@ -1936,10 +1931,14 @@ Section DirectRuleSetTrace.
       RSTrace o' calls lr
   | RSContinueTrace (o o' : RegsT) oldCalls newCalls calls lr
                     (RSOldTrace : RSTrace o' oldCalls lr)
-                    (HRSSubsteps :  RSSubsteps o newCalls lr)
+                    (HRSSubsteps :  RSSubsteps o' o newCalls lr)
                     (HNewCalls : calls [=] newCalls ++ oldCalls):
       RSTrace o calls lr.
 End DirectRuleSetTrace.
+
+Definition directRSTrace (m : BaseModule) (o : RegsT) (calls : MethsT)
+  (lr : list string) : Prop :=
+  rule_schedule m lr /\ RSTrace m o calls lr.
 
 Definition WeakInclusion (l1 : list FullLabel) (l2 : list FullLabel) : Prop :=
   (forall f, getListFullLabel_diff f l1 = getListFullLabel_diff f l2) /\
