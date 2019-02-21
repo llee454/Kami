@@ -989,10 +989,32 @@ Definition evalUniBit n1 n2 (op: UniBitOp n1 n2): word n1 -> word n2 :=
 Definition wdivN := wordBinN Nat.div.
 Definition wremN := wordBinN Nat.modulo.
 
+Definition wneg_simple sz (x: word sz) := wnot x ^+ $1.
+
+Definition wminus_simple sz (x y: word sz) := x ^+ (wneg_simple y).
+
+Lemma wneg_simple_wneg sz: forall (x: word sz), wneg_simple x = wneg x.
+Proof.
+  unfold wneg_simple.
+  intros.
+  rewrite wneg_wnot.
+  rewrite wminus_wplus_undo.
+  reflexivity.
+Qed.
+
+Lemma wminus_simple_wminus sz: forall (x y: word sz), wminus_simple x y = wminus x y.
+Proof.
+  unfold wminus_simple.
+  intros.
+  rewrite wneg_simple_wneg.
+  rewrite wminus_def.
+  reflexivity.
+Qed.
+
 Definition evalBinBit n1 n2 n3 (op: BinBitOp n1 n2 n3)
   : word n1 -> word n2 -> word n3 :=
   match op with
-    | Sub n => @wminus n
+    | Sub n => @wminus_simple n
     | Div n => @wdivN n
     | Rem n => @wremN n
     | Sll n m => (fun x y => wlshift x (wordToNat y))
@@ -2171,6 +2193,7 @@ Section inlineSingle.
     | Return e =>
       Return e
     end.
+
 End inlineSingle.
 
 Definition inlineSingle_Rule  (f : DefMethT) (rle : RuleT): RuleT.
@@ -2474,16 +2497,24 @@ Ltac struct_get_field_ltac packet name :=
   let val := eval cbv in (struct_get_field_index packet name) in
       match val with
       | Some ?x => exact (ReadStruct packet x)
-      | None => fail "field not found in struct"
-      | _ => fail "major error - struct_get_field_index not reducing"
+      | None =>
+        let newstr := constr:(("get field not found in struct" ++ name)%string) in
+        fail 0 newstr
+      | _ =>
+        let newstr := constr:(("major error - struct_get_field_index not reducing " ++ name)%string) in
+        fail 0 newstr
       end.
 
 Ltac struct_set_field_ltac packet name newval :=
   let val := eval cbv in (struct_get_field_index packet name) in
       match val with
       | Some ?x => exact (UpdateStruct packet x newval)
-      | None => fail "field not found in struct"
-      | _ => fail "major error - struct_get_field_index not reducing"
+      | None =>
+        let newstr := constr:(("set field not found in struct " ++ name)%string) in
+        fail 0 newstr
+      | _ =>
+        let newstr := constr:(("major error - struct_set_field_index not reducing " ++ name)%string) in
+        fail 0 newstr
       end.
 
 Definition struct_get_field_aux
