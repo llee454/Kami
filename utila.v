@@ -506,11 +506,30 @@ Section utila.
          utila_sem_interp
            : forall k : Kind, utila_m utila_sem_m k -> type k;
 
+         (*
+           [[mbind x f]] = [[ f [[x]] ]]
+         *)
+         utila_sem_bind_correct
+           : forall
+               (j k : Kind)
+               (x : utila_m utila_sem_m j)
+               (f : type j -> utila_m utila_sem_m k),
+               (utila_sem_interp k
+                 (utila_mbind utila_sem_m j k x f)) =
+               (utila_sem_interp k
+                 (f (utila_sem_interp j x)));
+
+         (*
+           [[munit x]] = {{x}}
+         *)
          utila_sem_unit_correct
            : forall (k : Kind) (x : k @# type),
                utila_sem_interp k (utila_munit (utila_sem_m) x) =
                evalExpr x;
 
+         (*
+           [[ mfoldr f init [] ]] = {{init}}
+         *)
          utila_sem_foldr_nil_correct
            : forall (j k : Kind)
                (f : j @# type -> k @# type -> k @# type)
@@ -519,6 +538,9 @@ Section utila.
                   (utila_mfoldr f init nil) =
                 evalExpr init);
 
+         (*
+           [[ mfoldr f init (x0 :: xs) ]] = {{ f #[[x0]] #[[mfoldr f init xs]] }}
+         *)
          utila_sem_foldr_cons_correct
            :  forall (j k : Kind)
                 (f : j @# type -> k @# type -> k @# type)
@@ -538,6 +560,10 @@ Section utila.
 
   Arguments utila_sem_interp {u} {k} x.
 
+  Arguments utila_sem_bind_correct {u} {j} {k} x f.
+
+  Arguments utila_sem_unit_correct {u} {k} x.
+
   Arguments utila_sem_foldr_nil_correct {u} {j} {k}.
 
   Arguments utila_sem_foldr_cons_correct {u} {j} {k}.
@@ -556,7 +582,11 @@ Section utila.
 
     Local Notation "{{ X }}" := (evalExpr X).
 
-    Local Notation "[[ X ]]" := (utila_sem_interp X).
+    Local Notation "[[ X ]]" := (@utila_sem_interp sem _ X).
+
+    Local Notation "#{{ X }}" := (Var type (SyntaxKind _) {{X}}).
+
+    Local Notation "#[[ X ]]" := (Var type (SyntaxKind _) [[X]]).
 
     Let utila_is_true (x : m Bool)
       :  Prop
@@ -669,8 +699,185 @@ Section utila.
 
     Definition utila_null (k : Kind)
       :  k @# type
-      := unpack k $0.
+      := unpack k (Var type (SyntaxKind (Bit (size k))) (natToWord (size k) 0)).
 
+    Lemma utila_mfind_nil
+      :  forall (k : Kind)
+           (f : k @# type -> Bool @# type),
+           [[utila_mfind f ([] : list (m k))]] = {{utila_null k}}.
+    Proof
+      fun k f
+        => eq_refl {{utila_null k}}
+           || X = {{utila_null k}}
+              @X by utila_sem_unit_correct (unpack k (Var type (SyntaxKind (Bit (size k))) (natToWord (size k) 0)))
+           || [[munit (unpack k (Var type (SyntaxKind (Bit (size k))) X))]] = {{utila_null k}}
+              @X by utila_sem_foldr_nil_correct
+                      (fun x acc => (ITE (f x) (pack x) ($0) | acc))
+                      ($0)
+           || X = {{utila_null k}}
+              @X by utila_sem_bind_correct
+                      (utila_mfoldr
+                         (fun x acc => (ITE (f x) (pack x) ($0) | acc))
+                         ($0)
+                         [])
+                      (fun y => munit (unpack k (Var type (SyntaxKind (Bit (size k))) y))).
+
+Lemma utila_mfind_simpl
+      :  forall (k : Kind)
+           (f : k @# type -> Bool @# type)
+           (xs : list (m k)),
+           [[utila_mfind f xs]] =
+           {{unpack k
+               #[[utila_mfoldr
+                    (fun x acc => (ITE (f x) (pack x) ($0) | acc))
+                    ($0)
+                    xs]]}}.
+Proof
+      fun k f xs
+        => eq_refl
+           || t =
+              {{unpack k
+                  #[[ utila_mfoldr
+                        (fun (x : Expr type (SyntaxKind k))
+                           (acc : Expr type (SyntaxKind (Bit (size k)))) =>
+                         (IF f x then pack x else Const type ($0)%word | acc))
+                        (Const type ($0)%word) xs]]}} @ t
+           by utila_sem_unit_correct
+                (unpack k
+                   #[[ utila_mfoldr
+                         (fun (x : Expr type (SyntaxKind k))
+                            (acc : Expr type (SyntaxKind (Bit (size k)))) =>
+                          (IF f x then pack x else Const type ($0)%word | acc))
+                         (Const type ($0)%word) xs]])
+           || t =
+              {{unpack k
+                  #[[ utila_mfoldr
+                        (fun (x : Expr type (SyntaxKind k))
+                           (acc : Expr type (SyntaxKind (Bit (size k)))) =>
+                         (IF f x then pack x else Const type ($0)%word | acc))
+                        (Const type ($0)%word) xs]]}} @ t
+           by utila_sem_bind_correct
+                (utila_mfoldr
+                   (fun (x : Expr type (SyntaxKind k))
+                      (acc : Expr type (SyntaxKind (Bit (size k)))) =>
+                    (IF f x then pack x else Const type ($0)%word | acc))
+                   (Const type ($0)%word) xs)
+                (fun y : type (Bit (size k)) =>
+                 utila_munit monad (unpack k (Var type (SyntaxKind (Bit (size k))) y))).
+
+(*
+    Lemma utila_mfind_simpl
+      :  forall (k : Kind)
+           (f : k @# type -> Bool @# type)
+           (xs : list (m k)),
+           [[utila_mfind f xs]] =
+           {{unpack k
+               #[[utila_mfoldr
+                    (fun x acc => (ITE (f x) (pack x) ($0) | acc))
+                    ($0)
+                    xs]]}}.
+    Proof
+      fun k f xs
+        => eq_refl [[utila_mfind f xs]]
+           || [[utila_mfind f xs]] = X
+              @X by <- utila_sem_bind_correct _ _
+           || [[utila_mfind f xs]] = X
+              @X by <- utila_sem_unit_correct _.
+
+    Lemma utila_mfind_cons_simpl
+      :  forall (k : Kind)
+           (f : k @# type -> Bool @# type)
+           (x0 : m k)
+           (xs : list (m k))
+           [[utila_mfind f (x0 :: xs)]] =
+           {{unpack k
+               ##((if {{f #[[x0]]}} then _ else _) ^|
+                  #[[mfoldr _ _ xs]]) }}.
+    Proof
+      fun k f x0 xs
+        => utila_find_simpl k f (x0 :: xs)
+           || [[utila_mfind f xs]] =
+              {{unpack k #[[X]]}}
+              @X by 
+*)
+(*
+    Lemma utila_mfind_tl
+      :  forall (k : Kind)
+           (f : k @# type -> Bool @# type)
+           (x0 : m k)
+           (xs : list (m k)),
+           {{f #[[x0]]}} = false ->
+           [[utila_mfind f (x0 :: xs)]] = [[utila_mfind f xs]].
+     Proof
+       fun k f x0 xs
+         => (* [[utila_mfind f (x0 :: xs)]] = _
+               by eq_refl
+               [[mbind k
+                   (utila_mfoldr _ _ (x0 :: xs))
+                   (fun y => munit (unpack k #y))]] =
+               [[utila_mfind f xs]]
+               by simpl
+               [[munit
+                   (unpack k
+                      #[[utila_mfoldr _ _ (x0 :: xs)]])]] =
+               [[utila_mfind f xs]]
+               by utila_sem_bind_correct
+               {{unpack k
+                   #[[utila_mfoldr _ _ (x0 :: xs)]]}} = 
+               [[utila_mfind f xs]]
+               by utila_sem_unit_correct
+               {{unpack k
+                   #[[munit
+                        (fun x acc => _)
+                           #[[x0]]
+                           #[[mfoldr _ _ xs]] ]]}} =
+               [[utila_mfind f xs]]
+               by utila_sem_foldr_cons_correct
+               {{unpack k
+                   #{{fun x acc => _)
+                        #[[x0]]
+                        #[[mfoldr _ _ xs]]}} }} =
+               _
+               by utila_sem_unit_correct
+               {{unpack k
+                   #{{(ITE (f #[[x0]]) _ _) |
+                      #[[mfoldr _ _ xs]]}} }} =
+               _
+               by simpl
+               {{unpack k
+                   #({{ITE (f #[[x0]]) _ _}} ^|
+                     {{#[[mfoldr _ _ xs]]}} }} =
+               _
+               by simpl
+               {{unpack k
+                   #((if {{f #[[x0]]}} then _ else _) ^|
+                     {{#[[mfoldr _ _ xs]]}}) }} =
+               _
+               by simpl
+               {{unpack k
+                   #((if false then _ else _) ^|
+                     {{#[[mfoldr _ _ xs]]}}) }} =
+               _
+               by hyp
+               {{unpack k
+                   #($(0) ^| {{#[[mfoldr _ _ xs]]}}) }} =
+               _
+               by simpl
+               {{unpack k {{#[[mfoldr _ _ xs]]}} }} = _
+               by wor_zero
+               {{unpack k [[mfoldr _ _ xs]]}} = [[utila_mfind f xs]]
+               by simpl (evalExpr over Var)
+               
+*)
+*)                   
+(*
+    Conjecture utila_mfind_none
+      :  forall (k : Kind)
+           (f : k @# type -> Bool @# type)
+           (xs : list (m k)),
+           Forall (fun x => In x xs /\ [[f x]] = false) xs ->
+           [[utila_mfind f xs]] = {{utila_null k}}.
+*)
   End monad_ver.
 
   Section expr_ver.
@@ -686,6 +893,18 @@ Section utila.
     Local Notation "==> Y" := (fun x => evalLetExpr x = Y) (at level 75).
 
     Let utila_is_true (x : Bool ## type) := x ==> true.
+
+    Let utila_expr_bind (j k : Kind) (x : j ## type) (f : type j -> k ## type)
+      :  k ## type
+      := @LetE type k j x f.
+
+    Lemma utila_expr_bind_correct
+      :  forall 
+           (j k : Kind)
+           (x : j ## type)
+           (f : type j -> k ## type),
+           [[utila_expr_bind x f]] = [[f [[x]] ]].
+    Proof fun j k x f => (eq_refl [[utila_expr_bind x f]]).
 
     Lemma utila_expr_unit_correct
       :  forall (k : Kind) (x : k @# type), [[RetE x]] = {{x}}.
@@ -720,6 +939,7 @@ Section utila.
       := utila_sem
            (utila_expr_monad type)
            evalLetExpr
+           utila_expr_bind_correct
            utila_expr_unit_correct
            utila_expr_foldr_correct_nil
            utila_expr_foldr_correct_cons.
